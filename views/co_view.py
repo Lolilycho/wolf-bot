@@ -280,3 +280,216 @@ async def fix(self, interaction: discord.Interaction, button: discord.ui.Button)
         view=FixSelectView(self.game_id, interaction.user.id),
         ephemeral=True
     )
+
+
+import discord
+from database import get_connection
+
+
+class FixSelectView(discord.ui.View):
+
+    def __init__(self, game_id: int, user_id: int):
+        super().__init__(timeout=60)
+
+        self.game_id = game_id
+        self.user_id = user_id
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+        SELECT id, role, target_name, result
+        FROM co_entries
+        WHERE game_id=? AND discord_id=?
+        ORDER BY id DESC
+        LIMIT 10
+        """, (game_id, user_id))
+
+        rows = cur.fetchall()
+        conn.close()
+
+        options = []
+
+        for r in rows:
+
+            label = f"{r['role']} {r['target_name']} {r['result']}"
+
+            options.append(
+                discord.SelectOption(
+                    label=label,
+                    value=str(r["id"])
+                )
+            )
+
+        self.select = discord.ui.Select(
+            placeholder="修正するCOを選択",
+            options=options
+        )
+
+        self.select.callback = self.select_callback
+        self.add_item(self.select)
+
+    async def select_callback(self, interaction: discord.Interaction):
+
+        co_id = int(self.select.values[0])
+
+        await interaction.response.edit_message(
+            content="修正内容を入力してください",
+            view=FixEditView(self.game_id, self.user_id, co_id)
+        )
+
+class FixEditView(discord.ui.View):
+
+    def __init__(self, game_id, user_id, co_id):
+        super().__init__(timeout=60)
+
+        self.game_id = game_id
+        self.user_id = user_id
+        self.co_id = co_id
+
+        self.add_item(RoleFixSelect(game_id, user_id, co_id))
+
+class RoleFixSelect(discord.ui.Select):
+
+    def __init__(self, game_id, user_id, co_id):
+
+        self.game_id = game_id
+        self.user_id = user_id
+        self.co_id = co_id
+
+        options = [
+            discord.SelectOption(label="占い師", value="占い師"),
+            discord.SelectOption(label="霊媒師", value="霊媒師"),
+            discord.SelectOption(label="狩人", value="狩人"),
+            discord.SelectOption(label="聖痕者", value="聖痕者"),
+        ]
+
+        super().__init__(
+            placeholder="役職を選択",
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        role = self.values[0]
+
+        await interaction.response.edit_message(
+            content=f"役職: {role}",
+            view=TargetFixView(self.game_id, self.user_id, self.co_id, role)
+        )
+
+class TargetFixView(discord.ui.View):
+
+    def __init__(self, game_id, user_id, co_id, role):
+        super().__init__(timeout=60)
+
+        self.game_id = game_id
+        self.user_id = user_id
+        self.co_id = co_id
+        self.role = role
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+        SELECT name FROM players
+        WHERE game_id=?
+        """, (game_id,))
+
+        players = cur.fetchall()
+        conn.close()
+
+        options = [
+            discord.SelectOption(label=p["name"], value=p["name"])
+            for p in players
+        ]
+
+        self.select = discord.ui.Select(
+            placeholder="対象を選択",
+            options=options
+        )
+
+        self.select.callback = self.callback
+        self.add_item(self.select)
+
+    async def callback(self, interaction: discord.Interaction):
+
+        target = self.select.values[0]
+
+        if self.role == "狩人":
+
+            await update_co(self.co_id, self.role, target, "護衛")
+
+        elif self.role == "聖痕者":
+
+            await update_co(self.co_id, self.role, None, None)
+
+        else:
+
+            await interaction.response.edit_message(
+                content="結果を選択",
+                view=ResultFixView(self.co_id, self.role, target)
+            )
+            return
+
+        await interaction.response.send_message(
+            "修正完了",
+            ephemeral=True
+        )
+
+class ResultFixView(discord.ui.View):
+
+    def __init__(self, co_id, role, target):
+        super().__init__(timeout=60)
+
+        self.co_id = co_id
+        self.role = role
+        self.target = target
+
+        options = [
+            discord.SelectOption(label="○", value="○"),
+            discord.SelectOption(label="●", value="●")
+        ]
+
+        self.select = discord.ui.Select(
+            placeholder="結果",
+            options=options
+        )
+
+        self.select.callback = self.callback
+        self.add_item(self.select)
+
+    async def callback(self, interaction: discord.Interaction):
+
+        result = self.select.values[0]
+
+        await update_co(self.co_id, self.role, self.target, result)
+
+        await interaction.response.send_message(
+            "修正完了",
+            ephemeral=True
+        )
+
+from database import get_connection
+
+
+async def update_co(co_id, role, target, result):
+
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+    UPDATE co_entries
+    SET role=?, target_name=?, result=?
+    WHERE id=?
+    """, (
+        role,
+        target,
+        result,
+        co_id
+    ))
+
+    conn.commit()
+    conn.close()
+
+
