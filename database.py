@@ -61,3 +61,5 @@ def init_db():
     conn.close()
 
 ALTER TABLE co_entries ADD COLUMN revoked INTEGER DEFAULT 0;
+
+ALTER TABLE games ADD COLUMN ended_at TEXT;
