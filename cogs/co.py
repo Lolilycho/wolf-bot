@@ -13,7 +13,7 @@ class COCog(commands.Cog):
 
         await interaction.channel.send(
             "COパネル",
-            view=COView(game_id=1)  # ←ここは後でDBから取得
+            view=COView(SELECT game_id FROM games WHERE guild_id=?)  # ←ここは後でDBから取得
         )
 
         await interaction.response.send_message(
