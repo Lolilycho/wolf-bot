@@ -59,3 +59,5 @@ def init_db():
 
     conn.commit()
     conn.close()
+
+ALTER TABLE co_entries ADD COLUMN revoked INTEGER DEFAULT 0;
