@@ -105,3 +105,12 @@ class Game(commands.Cog):
 
 async def setup(bot):
     await bot.add_cog(Game(bot))
+
+from views.register_view import RegisterView
+
+entry_channel = await category.create_text_channel("entry")
+
+await entry_channel.send(
+    "参加登録",
+    view=RegisterView(game_id)
+)
