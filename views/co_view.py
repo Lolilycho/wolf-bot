@@ -492,4 +492,81 @@ async def update_co(co_id, role, target, result):
     conn.commit()
     conn.close()
 
+@discord.ui.button(label="CO撤回", style=discord.ButtonStyle.red)
+async def revoke(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+    await interaction.response.send_message(
+        "撤回するCOを選択してください",
+        view=RevokeSelectView(self.game_id, interaction.user.id),
+        ephemeral=True
+    )
+
+
+import discord
+from database import get_connection
+
+
+class RevokeSelectView(discord.ui.View):
+
+    def __init__(self, game_id: int, user_id: int):
+        super().__init__(timeout=60)
+
+        self.game_id = game_id
+        self.user_id = user_id
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+        SELECT id, role, target_name, result
+        FROM co_entries
+        WHERE game_id=? AND discord_id=? AND revoked=0
+        ORDER BY id DESC
+        LIMIT 10
+        """, (game_id, user_id))
+
+        rows = cur.fetchall()
+        conn.close()
+
+        options = []
+
+        for r in rows:
+
+            label = f"{r['role']} {r['target_name']} {r['result']}"
+
+            options.append(
+                discord.SelectOption(
+                    label=label,
+                    value=str(r["id"])
+                )
+            )
+
+        self.select = discord.ui.Select(
+            placeholder="撤回するCOを選択",
+            options=options
+        )
+
+        self.select.callback = self.callback
+        self.add_item(self.select)
+
+    async def callback(self, interaction: discord.Interaction):
+
+        co_id = int(self.select.values[0])
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute("""
+        UPDATE co_entries
+        SET revoked=1
+        WHERE id=?
+        """, (co_id,))
+
+        conn.commit()
+        conn.close()
+
+        await interaction.response.edit_message(
+            content="COを撤回しました",
+            view=None
+    )
 
