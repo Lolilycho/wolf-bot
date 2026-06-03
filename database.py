@@ -63,3 +63,20 @@ def init_db():
 ALTER TABLE co_entries ADD COLUMN revoked INTEGER DEFAULT 0;
 
 ALTER TABLE games ADD COLUMN ended_at TEXT;
+
+
+def get_active_game(guild_id: int):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT * FROM games
+    WHERE guild_id=? AND status='ACTIVE'
+    ORDER BY id DESC
+    LIMIT 1
+    """, (guild_id,))
+
+    game = cur.fetchone()
+    conn.close()
+
+    return game
