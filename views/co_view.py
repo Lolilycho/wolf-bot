@@ -271,3 +271,12 @@ async def render_co_status(game_id):
             await msg.delete()
 
         await channel.send(output)
+
+@discord.ui.button(label="CO修正", style=discord.ButtonStyle.blurple)
+async def fix(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+    await interaction.response.send_message(
+        "修正するCOを選択してください",
+        view=FixSelectView(self.game_id, interaction.user.id),
+        ephemeral=True
+    )
